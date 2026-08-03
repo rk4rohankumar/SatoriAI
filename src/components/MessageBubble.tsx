@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as WebBrowser from 'expo-web-browser';
+import { matchCitedSources } from '@/src/components/sources';
+import { ToolChip } from '@/src/components/ToolChip';
+import type { ToolEventRecord } from '@/src/llm/types';
 import { useTheme } from '@/src/theme';
 import { Text } from '@/src/ui';
 
@@ -13,6 +17,8 @@ type Props = {
   /** When true, plays a subtle haptic on first mount of an assistant bubble (final response). */
   hapticOnMount?: boolean;
   animateEntrance?: boolean;
+  /** Web-search (and other tool) activity attached to this assistant message, if any. */
+  toolEvents?: ToolEventRecord[] | null;
 };
 
 export function MessageBubble({
@@ -22,9 +28,18 @@ export function MessageBubble({
   model,
   hapticOnMount,
   animateEntrance = true,
+  toolEvents,
 }: Props) {
   const { c, r, s } = useTheme();
   const isUser = role === 'user';
+
+  const sources =
+    !isUser && toolEvents?.length
+      ? matchCitedSources(
+          content,
+          toolEvents.flatMap((t) => t.results ?? []),
+        ).slice(0, 3)
+      : [];
 
   useEffect(() => {
     if (hapticOnMount) {
@@ -76,6 +91,8 @@ export function MessageBubble({
           backgroundColor: isUser ? c.bubbleUser : c.bubbleAssistant,
         }}
       >
+        {!isUser &&
+          toolEvents?.map((event) => <ToolChip key={event.id} event={event} />)}
         <Text
           variant="body"
           style={{
@@ -95,6 +112,27 @@ export function MessageBubble({
             {route ?? ''}
             {model ? ` · ${model}` : ''}
           </Text>
+        )}
+        {!isUser && sources.length > 0 && (
+          <View style={{ marginTop: s['2'], gap: 4 }}>
+            <Text variant="micro" color="fgSubtle">
+              Sources
+            </Text>
+            {sources.map((src) => (
+              <Pressable
+                key={src.url}
+                accessibilityRole="link"
+                accessibilityLabel={src.title}
+                onPress={() => {
+                  WebBrowser.openBrowserAsync(src.url).catch(() => {});
+                }}
+              >
+                <Text variant="meta" style={{ color: c.accent }} numberOfLines={1}>
+                  {src.title}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         )}
       </View>
     </Wrapper>
