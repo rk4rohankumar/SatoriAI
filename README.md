@@ -1,50 +1,56 @@
-# Welcome to your Expo app 👋
+# SatoriAI
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Hybrid local + cloud AI chat app for iOS and Android. Short prompts run on-device (Gemma 3 1B via `llama.rn`); longer or RAG-augmented prompts are relayed to Claude / Gemini through Supabase Edge Functions. Upload PDFs and chat over them with pgvector-backed retrieval.
 
-## Get started
+## Stack
 
-1. Install dependencies
+- **Mobile:** Expo SDK 54, React Native 0.81, TypeScript, expo-router
+- **Local LLM:** `llama.rn` + Gemma 3 1B (Q4_K_M GGUF, ~700 MB, downloaded on first run)
+- **Backend:** Supabase — Postgres + pgvector, Auth, Storage, Edge Functions
+- **Cloud LLM:** Claude Haiku 4.5 / Sonnet 4.6, Gemini 2.5 Flash / Pro
+- **Embeddings:** Gemini `text-embedding-004` (768-dim), HNSW cosine index
 
-   ```bash
-   npm install
-   ```
+## Features
 
-2. Start the app
+- Email auth (Supabase)
+- Chat with streaming responses, conversation history
+- Automatic local/cloud routing (`src/llm/router.ts`) — explicit choice wins; RAG context, long input, or long history routes to cloud
+- Library: PDF upload → chunk → embed → retrieve
+- Per-user data isolation via RLS; private storage bucket
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Getting started
 
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env   # fill in Supabase URL + anon key, model URL
+npm run start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+`llama.rn` is a native module — Expo Go won't work. Build a dev client first:
 
-## Learn more
+```bash
+eas build --profile development --platform ios   # or android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Full backend setup (Supabase link, migrations, Edge Function secrets and deploys) in [SETUP.md](SETUP.md). Design system in [DESIGN.md](DESIGN.md).
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Project layout
 
-## Join the community
+```
+app/                # expo-router screens: (auth), (tabs), chat/[id]
+src/
+  db/               # supabase client + types
+  llm/              # local, cloud, router, chat orchestrator
+  store/            # zustand stores
+  components/ ui/   # chat components, design-system primitives
+supabase/
+  migrations/       # SQL schema
+  functions/        # chat-cloud, ingest-doc, retrieve (+ _shared)
+```
 
-Join our community of developers creating universal apps.
+## Builds
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+eas build --profile preview --platform android      # installable APK, shareable link
+eas build --profile production --platform all       # store builds
+```
