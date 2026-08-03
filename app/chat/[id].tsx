@@ -101,18 +101,20 @@ export default function ChatDetail() {
             </View>
           }
           ListFooterComponent={
-            streaming ? (
+            streaming !== undefined || streamingTool ? (
               <>
                 {streamingTool && (
                   <View style={{ paddingHorizontal: s['5'] + 26 + s['2'] }}>
                     <ToolChip event={streamingTool} />
                   </View>
                 )}
-                <MessageBubble
-                  role="assistant"
-                  content={streaming}
-                  animateEntrance={false}
-                />
+                {streaming ? (
+                  <MessageBubble
+                    role="assistant"
+                    content={streaming}
+                    animateEntrance={false}
+                  />
+                ) : null}
               </>
             ) : showTyping ? (
               <View style={{ paddingHorizontal: s['5'] + 26 + s['2'], paddingVertical: s['2'] }}>
