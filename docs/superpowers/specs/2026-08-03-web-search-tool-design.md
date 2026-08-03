@@ -26,7 +26,7 @@ Cloud chat gains agentic web search via Tavily. Local Gemma path is untouched �
 
 **Stream parsing**
 - `src/llm/cloud.ts` SSE parser handles `tool_call` / `tool_result`.
-- `src/llm/chat.ts` orchestrator exposes them via a new `onToolEvent` callback beside the existing text callback.
+- `src/llm/chat.ts` handles them in its existing `onEvent` stream handler, accumulating a `ToolEventRecord[]` and mirroring live tool activity into the messages store (`streamingTool`), which the chat screen reads.
 
 **UI**
 - New `src/components/ToolChip.tsx`. Rendered by `MessageBubble` above answer text: spinner + "Searching: _query_" while running → collapses to "Searched web · 5 sources (tavily.com, bbc.com…)". Tap → expandable source list; URLs open via `expo-web-browser`.
@@ -35,7 +35,8 @@ Cloud chat gains agentic web search via Tavily. Local Gemma path is untouched �
 
 **Persistence**
 - Migration: `alter table messages add column tool_events jsonb;` (null for normal messages).
-- Edge Function writes the final `tool_events` array when persisting the assistant message; `src/store/messages.ts` reads it back so chips survive reload.
+- The client persists the final `tool_events` array with the assistant message (the client already owns assistant-message inserts in `src/llm/chat.ts`); `src/store/messages.ts` reads it back so chips survive reload.
+- `tool_result` SSE events carry `results: [{title, url}]` (top 5, no content bodies) so the expandable source list and Sources footer have data without a second fetch.
 - Regenerate `src/db/types.ts` with `supabase gen types typescript --linked` (retires the hand-written types follow-up).
 
 **Limits UX**
