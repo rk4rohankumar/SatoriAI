@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Splash (dark): cream enso, sage spark, transparent bg -->
+  <path d="M 829.2 421.0 A 330 330 0 1 1 656.7 215.4"
+        fill="none" stroke="#F2EEE3" stroke-width="92" stroke-linecap="round"/>
+  <circle cx="764.8" cy="299.9" r="46" fill="#7DAB85"/>
+</svg>

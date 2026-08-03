@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Splash (light): ink enso, transparent bg -->
+  <path d="M 829.2 421.0 A 330 330 0 1 1 656.7 215.4"
+        fill="none" stroke="#1B1815" stroke-width="92" stroke-linecap="round"/>
+  <circle cx="764.8" cy="299.9" r="46" fill="#3F6B47"/>
+</svg>
