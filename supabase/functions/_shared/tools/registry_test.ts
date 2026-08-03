@@ -30,12 +30,17 @@ Deno.test('throwing tool becomes failure result', async () => {
   assertEquals(res.success, false);
 });
 
-Deno.test('slow tool times out', async () => {
-  const r = new ToolRegistry();
-  r.register({
-    definition: { name: 'slow', description: '', input_schema: {} },
-    execute: () => new Promise((resolve) => setTimeout(() => resolve({ success: true, content: 'late' }), 200)),
-  });
-  const res = await r.execute('slow', {}, 50);
-  assertEquals(res.success, false);
+Deno.test({
+  name: 'slow tool times out',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const r = new ToolRegistry();
+    r.register({
+      definition: { name: 'slow', description: '', input_schema: {} },
+      execute: () => new Promise((resolve) => setTimeout(() => resolve({ success: true, content: 'late' }), 200)),
+    });
+    const res = await r.execute('slow', {}, 50);
+    assertEquals(res.success, false);
+  },
 });
