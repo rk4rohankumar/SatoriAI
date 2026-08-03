@@ -14,11 +14,25 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://btpuxcuvphoccqjqpcok.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_8SgUC1c8y6xtwU5-SUyqaQ_7RKa8yqv",
+        "EXPO_PUBLIC_MODEL_URL": "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf",
+        "EXPO_PUBLIC_MODEL_FILENAME": "gemma-3-1b-it-Q4_K_M.gguf",
+        "EXPO_PUBLIC_DEFAULT_CLOUD_PROVIDER": "anthropic"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://btpuxcuvphoccqjqpcok.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_8SgUC1c8y6xtwU5-SUyqaQ_7RKa8yqv",
+        "EXPO_PUBLIC_MODEL_URL": "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf",
+        "EXPO_PUBLIC_MODEL_FILENAME": "gemma-3-1b-it-Q4_K_M.gguf",
+        "EXPO_PUBLIC_DEFAULT_CLOUD_PROVIDER": "anthropic"
+      }
     }
   },
   "submit": {

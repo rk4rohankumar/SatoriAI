@@ -15,7 +15,7 @@ Mobile RN/Expo app: hybrid local + cloud LLM, Supabase backend, RAG over uploade
 ### 1) Supabase CLI auth + link
 ```bash
 supabase login                       # interactive (browser)
-supabase link --project-ref btpuxcuvphoccqjqpcok
+supabase link --project-ref <your-project-ref>
 ```
 
 ### 2) Push schema to remote
@@ -41,9 +41,9 @@ supabase functions deploy retrieve
 ```
 
 ### 5) Local env (mobile)
-`.env` is already populated with the Supabase URL + anon key. Update if needed:
+Copy `.env.example` to `.env` and fill in your Supabase URL + publishable anon key:
 ```
-EXPO_PUBLIC_SUPABASE_URL=https://btpuxcuvphoccqjqpcok.supabase.co
+EXPO_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
 EXPO_PUBLIC_MODEL_URL=https://huggingface.co/.../gemma-3-1b-it-Q4_K_M.gguf
 EXPO_PUBLIC_MODEL_FILENAME=gemma-3-1b-it-Q4_K_M.gguf

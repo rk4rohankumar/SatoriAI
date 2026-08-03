@@ -1,6 +1,16 @@
 # SatoriAI
 
-Hybrid local + cloud AI chat app for iOS and Android. Short prompts run on-device (Gemma 3 1B via `llama.rn`); longer or RAG-augmented prompts are relayed to Claude / Gemini through Supabase Edge Functions. Upload PDFs and chat over them with pgvector-backed retrieval.
+Hybrid local + cloud AI chat app for Android and iOS. Short prompts run fully on-device (Gemma 3 1B via `llama.rn` — works offline); longer or document-grounded prompts are relayed to Claude / Gemini through Supabase Edge Functions. Upload PDFs and chat over them with pgvector-backed retrieval.
+
+## 📲 Install (Android)
+
+**[Download the APK — latest release](https://github.com/rk4rohankumar/SatoriAI/releases/latest)**
+
+1. Download `SatoriAI-v1.0.0.apk` on your Android phone
+2. Open it — allow "install from unknown sources" when prompted
+3. First launch downloads the on-device model (~700 MB, Wi-Fi recommended); cloud chat works immediately
+
+iOS: no prebuilt binary (Apple requires a paid developer account for distribution). Build it yourself — see below.
 
 ## Stack
 
@@ -12,27 +22,42 @@ Hybrid local + cloud AI chat app for iOS and Android. Short prompts run on-devic
 
 ## Features
 
-- Email auth (Supabase)
-- Chat with streaming responses, conversation history
-- Automatic local/cloud routing (`src/llm/router.ts`) — explicit choice wins; RAG context, long input, or long history routes to cloud
-- Library: PDF upload → chunk → embed → retrieve
-- Per-user data isolation via RLS; private storage bucket
+- Email auth (Supabase, RLS-isolated per user)
+- Streaming chat with conversation history
+- Automatic local/cloud routing (`src/llm/router.ts`): explicit choice wins; RAG context, long input, or long history → cloud; otherwise on-device Gemma
+- Library: PDF upload → chunk → embed → pgvector retrieval
+- Soft daily cap on cloud calls per user
 
-## Getting started
+## Run it yourself (devs)
+
+You need your own free [Supabase](https://supabase.com) project plus Anthropic and/or Google API keys.
 
 ```bash
+git clone https://github.com/rk4rohankumar/SatoriAI.git && cd SatoriAI
 npm install
-cp .env.example .env   # fill in Supabase URL + anon key, model URL
-npm run start
+cp .env.example .env        # fill in your Supabase URL + publishable anon key
 ```
 
-`llama.rn` is a native module — Expo Go won't work. Build a dev client first:
+Backend (one-time):
 
 ```bash
-eas build --profile development --platform ios   # or android
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase db push                                   # schema + pgvector + RLS
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+supabase secrets set GOOGLE_API_KEY=AIza...
+supabase functions deploy chat-cloud ingest-doc retrieve
 ```
 
-Full backend setup (Supabase link, migrations, Edge Function secrets and deploys) in [SETUP.md](SETUP.md). Design system in [DESIGN.md](DESIGN.md).
+Mobile — `llama.rn` is a native module, so **Expo Go won't work**; build a dev client:
+
+```bash
+npm i -g eas-cli && eas login
+eas build --profile development --platform android   # or ios (simulator supported)
+npm run start                                        # then open in the dev client
+```
+
+Full walkthrough in [SETUP.md](SETUP.md). Design system in [DESIGN.md](DESIGN.md).
 
 ## Project layout
 
@@ -48,9 +73,15 @@ supabase/
   functions/        # chat-cloud, ingest-doc, retrieve (+ _shared)
 ```
 
-## Builds
+## Release builds
 
 ```bash
-eas build --profile preview --platform android      # installable APK, shareable link
+eas build --profile preview --platform android      # installable APK
 eas build --profile production --platform all       # store builds
 ```
+
+`eas.json` build profiles embed the public client env (`EXPO_PUBLIC_*`) — swap those values for your own Supabase project when forking. Only the publishable anon key ships in the app; all provider API keys live server-side in Edge Function secrets.
+
+## License
+
+MIT
