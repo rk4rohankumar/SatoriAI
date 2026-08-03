@@ -26,6 +26,7 @@ iOS: no prebuilt binary (Apple requires a paid developer account for distributio
 - Streaming chat with conversation history
 - Automatic local/cloud routing (`src/llm/router.ts`): explicit choice wins; RAG context, long input, or long history → cloud; otherwise on-device Gemma
 - Library: PDF upload → chunk → embed → pgvector retrieval
+- Agentic web search (Tavily) on cloud chats — model decides when to search; sources shown in-chat
 - Soft daily cap on cloud calls per user
 
 ## Run it yourself (devs)

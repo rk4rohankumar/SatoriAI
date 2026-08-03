@@ -1,4 +1,5 @@
 import { supabase } from '@/src/db/supabase';
+import { feedSse } from './sse';
 import type { ChatRequest, LLMProvider, StreamHandler } from './types';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -60,24 +61,7 @@ export const cloudProvider: LLMProvider = {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        buf += decoder.decode(value, { stream: true });
-
-        let idx: number;
-        while ((idx = buf.indexOf('\n\n')) !== -1) {
-          const event = buf.slice(0, idx).trim();
-          buf = buf.slice(idx + 2);
-          for (const line of event.split('\n')) {
-            if (!line.startsWith('data:')) continue;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(payload) as Parameters<StreamHandler>[0];
-              onEvent(parsed);
-            } catch {
-              // ignore malformed line
-            }
-          }
-        }
+        buf = feedSse(buf, decoder.decode(value, { stream: true }), onEvent);
       }
     } catch (e) {
       onEvent({ type: 'error', message: e instanceof Error ? e.message : String(e) });

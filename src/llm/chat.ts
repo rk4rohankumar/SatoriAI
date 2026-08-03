@@ -4,7 +4,7 @@ import type { Message } from '@/src/store/messages';
 import { cloudProvider } from './cloud';
 import { isModelDownloaded, localProvider } from './local';
 import { decideRoute } from './router';
-import type { ChatMessage, ChatRequest, LLMRoute, StreamEvent } from './types';
+import type { ChatMessage, ChatRequest, LLMRoute, StreamEvent, ToolEventRecord } from './types';
 
 const SYSTEM_PROMPT =
   'You are SatoriAI, a concise assistant. Answer directly. Use markdown sparingly.';
@@ -84,6 +84,7 @@ export async function sendMessage(
   let tokensIn: number | undefined;
   let tokensOut: number | undefined;
   let lastError: string | null = null;
+  const toolEvents: ToolEventRecord[] = [];
 
   const onEvent = (e: StreamEvent) => {
     if (e.type === 'token') {
@@ -95,6 +96,20 @@ export async function sendMessage(
       tokensOut = e.tokensOut;
     } else if (e.type === 'error') {
       lastError = e.message;
+    } else if (e.type === 'tool_call') {
+      const rec: ToolEventRecord = { id: e.id, name: e.name, query: e.query, status: 'running' };
+      toolEvents.push(rec);
+      ms.setStreamingTool(conversationId, rec);
+    } else if (e.type === 'tool_result') {
+      const rec = toolEvents.find((t) => t.id === e.id);
+      if (rec) {
+        rec.status = e.error ? 'error' : 'done';
+        rec.count = e.count;
+        rec.domains = e.domains;
+        rec.results = e.results;
+        rec.error = e.error;
+        ms.setStreamingTool(conversationId, { ...rec });
+      }
     }
   };
 
@@ -104,6 +119,7 @@ export async function sendMessage(
   if (lastError && route === 'local' && cloudConsent) {
     lastError = null;
     acc = '';
+    toolEvents.length = 0;
     ms.setStreaming(conversationId, '');
     route = 'cloud';
     await cloudProvider.chat(req, onEvent);
@@ -114,6 +130,11 @@ export async function sendMessage(
   }
 
   ms.clearStreaming(conversationId);
+
+  // any tool call still "running" at this point never got a result (stream cut short)
+  for (const rec of toolEvents) {
+    if (rec.status === 'running') rec.status = 'interrupted';
+  }
 
   // 4. persist assistant message
   const { data: asstMsg } = await supabase
@@ -127,6 +148,7 @@ export async function sendMessage(
       model: model ?? null,
       tokens_in: tokensIn ?? null,
       tokens_out: tokensOut ?? null,
+      tool_events: toolEvents.length ? toolEvents : null,
     })
     .select()
     .single();

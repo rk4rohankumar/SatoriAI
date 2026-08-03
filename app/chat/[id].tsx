@@ -10,7 +10,9 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useLocalSearchParams } from 'expo-router';
 import { Composer } from '@/src/components/Composer';
 import { MessageBubble } from '@/src/components/MessageBubble';
+import { ToolChip } from '@/src/components/ToolChip';
 import { sendMessage } from '@/src/llm/chat';
+import type { ToolEventRecord } from '@/src/llm/types';
 import { useMessages } from '@/src/store/messages';
 import type { Message } from '@/src/store/messages';
 import { useTheme } from '@/src/theme';
@@ -28,6 +30,7 @@ export default function ChatDetail() {
 
   const messages = useMessages((st) => st.byConv[conversationId] ?? EMPTY_MSGS);
   const streaming = useMessages((st) => st.streaming[conversationId]);
+  const streamingTool = useMessages((st) => st.streamingTool[conversationId]);
   const load = useMessages((st) => st.load);
   const subscribe = useMessages((st) => st.subscribe);
 
@@ -75,6 +78,7 @@ export default function ChatDetail() {
               content={item.content}
               route={item.route}
               model={item.model}
+              toolEvents={item.tool_events as ToolEventRecord[] | null}
               animateEntrance={index >= messages.length - 3}
             />
           )}
@@ -97,12 +101,21 @@ export default function ChatDetail() {
             </View>
           }
           ListFooterComponent={
-            streaming ? (
-              <MessageBubble
-                role="assistant"
-                content={streaming}
-                animateEntrance={false}
-              />
+            streaming !== undefined || streamingTool ? (
+              <>
+                {streamingTool && (
+                  <View style={{ paddingHorizontal: s['5'] + 26 + s['2'] }}>
+                    <ToolChip event={streamingTool} />
+                  </View>
+                )}
+                {streaming ? (
+                  <MessageBubble
+                    role="assistant"
+                    content={streaming}
+                    animateEntrance={false}
+                  />
+                ) : null}
+              </>
             ) : showTyping ? (
               <View style={{ paddingHorizontal: s['5'] + 26 + s['2'], paddingVertical: s['2'] }}>
                 <TypingDots />

@@ -145,6 +145,7 @@ export type Database = {
           route: Database["public"]["Enums"]["message_route"] | null
           tokens_in: number | null
           tokens_out: number | null
+          tool_events: Json | null
           user_id: string
         }
         Insert: {
@@ -157,6 +158,7 @@ export type Database = {
           route?: Database["public"]["Enums"]["message_route"] | null
           tokens_in?: number | null
           tokens_out?: number | null
+          tool_events?: Json | null
           user_id: string
         }
         Update: {
@@ -169,6 +171,7 @@ export type Database = {
           route?: Database["public"]["Enums"]["message_route"] | null
           tokens_in?: number | null
           tokens_out?: number | null
+          tool_events?: Json | null
           user_id?: string
         }
         Relationships: [

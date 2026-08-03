@@ -1,6 +1,10 @@
 // deno-lint-ignore-file no-explicit-any
 import { authenticate } from '../_shared/auth.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { ToolRegistry } from '../_shared/tools/registry.ts';
+import { createWebSearchTool } from '../_shared/tools/tavily.ts';
+import { runAnthropic } from '../_shared/anthropic.ts';
+import { runGemini } from '../_shared/gemini.ts';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -13,11 +17,54 @@ type Body = {
 
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const GOOGLE_KEY = Deno.env.get('GOOGLE_API_KEY');
+const TAVILY_KEY = Deno.env.get('TAVILY_API_KEY');
 
 const SOFT_DAILY_CAP = parseInt(Deno.env.get('SOFT_DAILY_CAP') ?? '100', 10);
 
+const registry = new ToolRegistry();
+if (TAVILY_KEY) registry.register(createWebSearchTool(TAVILY_KEY));
+
 function sseEncode(obj: unknown): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`);
+}
+
+// ─────────────────────────────── helpers ───────────────────────────────────
+function isHardRequest(body: Body): boolean {
+  const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
+  return (lastUser?.content?.length ?? 0) > 600 || !!body.rag_context;
+}
+
+function pickAnthropicModel(body: Body): string {
+  return isHardRequest(body) ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+}
+
+function pickGeminiModel(body: Body): string {
+  return isHardRequest(body) ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+}
+
+function buildSystem(body: Body): string {
+  let system =
+    (body.messages.find((m) => m.role === 'system')?.content ?? '') +
+    (body.rag_context ? `\n\nRelevant context (cite if used):\n${body.rag_context}` : '');
+  if (registry.size > 0) {
+    system += '\n\nIf a web search fails, answer from your own knowledge and say the search failed.';
+  }
+  return system;
+}
+
+function toAnthropicMessages(body: Body): { role: string; content: unknown }[] {
+  return body.messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({ role: m.role, content: m.content }));
+}
+
+function toGeminiContents(body: Body): { role: string; parts: unknown[] }[] {
+  return body.messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
 }
 
 Deno.serve(async (req) => {
@@ -57,19 +104,42 @@ Deno.serve(async (req) => {
       let tokensOut = 0;
       let model = '';
 
+      const emit = (event: Record<string, unknown>) => controller.enqueue(sseEncode(event));
+      const deadlineMs = Date.now() + 100_000;
+
       try {
         if (provider === 'anthropic') {
           if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set');
-          ({ tokensIn, tokensOut, model } = await streamAnthropic(body, controller));
+          ({ tokensIn, tokensOut, model } = await runAnthropic({
+            apiKey: ANTHROPIC_KEY,
+            model: pickAnthropicModel(body),
+            system: buildSystem(body),
+            messages: toAnthropicMessages(body),
+            registry,
+            emit,
+            deadlineMs,
+          }));
         } else {
           if (!GOOGLE_KEY) throw new Error('GOOGLE_API_KEY not set');
-          ({ tokensIn, tokensOut, model } = await streamGemini(body, controller));
+          ({ tokensIn, tokensOut, model } = await runGemini({
+            apiKey: GOOGLE_KEY,
+            model: pickGeminiModel(body),
+            system: buildSystem(body),
+            messages: toGeminiContents(body),
+            registry,
+            emit,
+            deadlineMs,
+          }));
         }
 
         controller.enqueue(sseEncode({ type: 'done', tokensIn, tokensOut, model }));
 
         // bookkeeping
-        await caller.adminClient.rpc('increment_usage' as any, {}).catch(() => {});
+        try {
+          await caller.adminClient.rpc('increment_usage' as any, {});
+        } catch {
+          /* best-effort */
+        }
         await caller.adminClient.from('usage_daily').upsert(
           {
             user_id: caller.userId,
@@ -99,152 +169,3 @@ Deno.serve(async (req) => {
     },
   });
 });
-
-// ───────────────────────────── Anthropic (Claude) ───────────────────────────
-async function streamAnthropic(
-  body: Body,
-  controller: ReadableStreamDefaultController,
-): Promise<{ tokensIn: number; tokensOut: number; model: string }> {
-  const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
-  const isHard = (lastUser?.content?.length ?? 0) > 600 || !!body.rag_context;
-  const model = isHard ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
-
-  const system =
-    (body.messages.find((m) => m.role === 'system')?.content ?? '') +
-    (body.rag_context
-      ? `\n\nRelevant context (cite if used):\n${body.rag_context}`
-      : '');
-
-  const claudeMessages = body.messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role, content: m.content }));
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': ANTHROPIC_KEY!,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      system: system || undefined,
-      messages: claudeMessages,
-      max_tokens: 1024,
-      stream: true,
-    }),
-  });
-
-  if (!res.ok || !res.body) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`anthropic ${res.status}: ${t}`);
-  }
-
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = '';
-  let tokensIn = 0;
-  let tokensOut = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buf.indexOf('\n\n')) !== -1) {
-      const ev = buf.slice(0, nl);
-      buf = buf.slice(nl + 2);
-      for (const line of ev.split('\n')) {
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (!payload) continue;
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-            controller.enqueue(sseEncode({ type: 'token', text: parsed.delta.text }));
-          } else if (parsed.type === 'message_start' && parsed.message?.usage) {
-            tokensIn = parsed.message.usage.input_tokens ?? 0;
-          } else if (parsed.type === 'message_delta' && parsed.usage) {
-            tokensOut = parsed.usage.output_tokens ?? tokensOut;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-  }
-
-  return { tokensIn, tokensOut, model };
-}
-
-// ───────────────────────────── Gemini ──────────────────────────────────────
-async function streamGemini(
-  body: Body,
-  controller: ReadableStreamDefaultController,
-): Promise<{ tokensIn: number; tokensOut: number; model: string }> {
-  const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
-  const isHard = (lastUser?.content?.length ?? 0) > 600 || !!body.rag_context;
-  const model = isHard ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
-
-  const systemText =
-    (body.messages.find((m) => m.role === 'system')?.content ?? '') +
-    (body.rag_context ? `\n\nRelevant context:\n${body.rag_context}` : '');
-
-  const contents = body.messages
-    .filter((m) => m.role !== 'system')
-    .map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
-    }));
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${GOOGLE_KEY}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents,
-      systemInstruction: systemText ? { parts: [{ text: systemText }] } : undefined,
-      generationConfig: { maxOutputTokens: 1024 },
-    }),
-  });
-  if (!res.ok || !res.body) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`gemini ${res.status}: ${t}`);
-  }
-
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = '';
-  let tokensIn = 0;
-  let tokensOut = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buf.indexOf('\n\n')) !== -1) {
-      const ev = buf.slice(0, nl);
-      buf = buf.slice(nl + 2);
-      for (const line of ev.split('\n')) {
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (!payload) continue;
-        try {
-          const parsed = JSON.parse(payload);
-          const text =
-            parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) controller.enqueue(sseEncode({ type: 'token', text }));
-          if (parsed?.usageMetadata) {
-            tokensIn = parsed.usageMetadata.promptTokenCount ?? tokensIn;
-            tokensOut = parsed.usageMetadata.candidatesTokenCount ?? tokensOut;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-  }
-
-  return { tokensIn, tokensOut, model };
-}

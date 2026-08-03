@@ -1,24 +1,28 @@
 import { create } from 'zustand';
 import { supabase } from '@/src/db/supabase';
 import type { Database } from '@/src/db/types';
+import type { ToolEventRecord } from '@/src/llm/types';
 
 export type Message = Database['public']['Tables']['messages']['Row'];
 
 type State = {
   byConv: Record<string, Message[]>;
   streaming: Record<string, string>; // partial assistant text per conversation
+  streamingTool: Record<string, ToolEventRecord | null>; // in-flight tool call per conversation
   loading: Record<string, boolean>;
 
   load: (conversationId: string) => Promise<void>;
   appendLocal: (msg: Message) => void;
   setStreaming: (conversationId: string, text: string) => void;
   clearStreaming: (conversationId: string) => void;
+  setStreamingTool: (conversationId: string, t: ToolEventRecord | null) => void;
   subscribe: (conversationId: string) => () => void;
 };
 
 export const useMessages = create<State>((set) => ({
   byConv: {},
   streaming: {},
+  streamingTool: {},
   loading: {},
 
   load: async (conversationId) => {
@@ -58,8 +62,11 @@ export const useMessages = create<State>((set) => ({
     set((s) => {
       const next = { ...s.streaming };
       delete next[conversationId];
-      return { streaming: next };
+      return { streaming: next, streamingTool: { ...s.streamingTool, [conversationId]: null } };
     }),
+
+  setStreamingTool: (conversationId, t) =>
+    set((s) => ({ streamingTool: { ...s.streamingTool, [conversationId]: t } })),
 
   subscribe: (conversationId) => {
     const ch = supabase

@@ -27,6 +27,7 @@ supabase db push
 ```bash
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 supabase secrets set GOOGLE_API_KEY=AIza...
+supabase secrets set TAVILY_API_KEY=tvly-...   # optional; enables web search tool
 # optional override (default 100):
 supabase secrets set SOFT_DAILY_CAP=100
 ```
