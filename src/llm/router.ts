@@ -1,24 +1,26 @@
 import type { ChatRequest, LLMRoute } from './types';
 
+export type RouteContext = {
+  cloudConsent: boolean;
+};
+
 /**
- * v1 router: simple rules. Replace with model-based classifier later.
+ * v2 router: cloud-first.
+ *
+ * The local model is an offline/no-consent fallback, not the default —
+ * quality gap between a 4B Q4 GGUF and Haiku/Flash is too large to route
+ * everyday questions on-device.
  *
  * Rules:
  *   - explicit user choice wins
- *   - RAG context present  → cloud (1B too small for retrieval reasoning)
- *   - long input (>200ch)  → cloud
- *   - history > 6 turns    → cloud
- *   - else                 → local
+ *   - cloud consent given → cloud
+ *   - else               → local
+ *
+ * chat.ts adds the runtime fallbacks: local when cloud fails (offline)
+ * and cloud when the local model isn't downloaded.
  */
-export function decideRoute(req: ChatRequest): LLMRoute {
+export function decideRoute(req: ChatRequest, ctx: RouteContext): LLMRoute {
   if (req.preferredRoute) return req.preferredRoute;
-
-  if (req.ragContext && req.ragContext.length > 0) return 'cloud';
-
-  const lastUserMsg = [...req.messages].reverse().find((m) => m.role === 'user');
-  if (lastUserMsg && lastUserMsg.content.length > 200) return 'cloud';
-
-  if (req.messages.length > 12) return 'cloud';
-
+  if (ctx.cloudConsent) return 'cloud';
   return 'local';
 }

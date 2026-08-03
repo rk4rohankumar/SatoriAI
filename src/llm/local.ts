@@ -121,7 +121,7 @@ export const localProvider: LLMProvider = {
         type: 'done',
         tokensIn: result.tokens_evaluated,
         tokensOut: result.tokens_predicted,
-        model: 'gemma-3-1b-it-Q4_K_M',
+        model: MODEL_FILENAME.replace(/\.gguf$/i, ''),
       });
     } catch (e) {
       onEvent({ type: 'error', message: e instanceof Error ? e.message : String(e) });

@@ -7,12 +7,13 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { Composer } from '@/src/components/Composer';
 import { MessageBubble } from '@/src/components/MessageBubble';
 import { ToolChip } from '@/src/components/ToolChip';
 import { sendMessage } from '@/src/llm/chat';
 import type { ToolEventRecord } from '@/src/llm/types';
+import { useConversations } from '@/src/store/conversations';
 import { useMessages } from '@/src/store/messages';
 import type { Message } from '@/src/store/messages';
 import { useTheme } from '@/src/theme';
@@ -27,6 +28,10 @@ export default function ChatDetail() {
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const conversationId = id!;
+
+  const title = useConversations(
+    (st) => st.list.find((conv) => conv.id === conversationId)?.title,
+  );
 
   const messages = useMessages((st) => st.byConv[conversationId] ?? EMPTY_MSGS);
   const streaming = useMessages((st) => st.streaming[conversationId]);
@@ -63,6 +68,7 @@ export default function ChatDetail() {
       style={{ flex: 1, backgroundColor: c.bg }}
       edges={['left', 'right', 'bottom']}
     >
+      <Stack.Screen options={{ title: title ?? 'New chat' }} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

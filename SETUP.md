@@ -4,7 +4,7 @@ Mobile RN/Expo app: hybrid local + cloud LLM, Supabase backend, RAG over uploade
 
 ## Stack
 - **Mobile:** Expo SDK 54, RN 0.81, TypeScript, expo-router
-- **Local LLM:** `llama.rn` + Gemma 3 1B (Q4_K_M GGUF, ~700 MB, downloaded post-install)
+- **Local LLM:** `llama.rn` + Gemma 3 4B (Q4_K_M GGUF, ~2.5 GB, downloaded post-install; offline fallback)
 - **Backend:** Supabase (Postgres + pgvector, Auth, Storage, Realtime, Edge Functions)
 - **Cloud LLM:** Claude Haiku 4.5 / Sonnet 4.6 + Gemini 2.5 Flash / Pro
 - **Embeddings:** Gemini `text-embedding-004` (768-dim)
@@ -46,8 +46,8 @@ Copy `.env.example` to `.env` and fill in your Supabase URL + publishable anon k
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
-EXPO_PUBLIC_MODEL_URL=https://huggingface.co/.../gemma-3-1b-it-Q4_K_M.gguf
-EXPO_PUBLIC_MODEL_FILENAME=gemma-3-1b-it-Q4_K_M.gguf
+EXPO_PUBLIC_MODEL_URL=https://huggingface.co/.../gemma-3-4b-it-Q4_K_M.gguf
+EXPO_PUBLIC_MODEL_FILENAME=gemma-3-4b-it-Q4_K_M.gguf
 ```
 
 ### 6) Build dev client (required — `llama.rn` is a native module, Expo Go won't work)
@@ -97,13 +97,12 @@ supabase/
     _shared/                  # cors, auth, chunk, embed helpers
 ```
 
-## Routing logic (v1)
-`src/llm/router.ts` decides local vs cloud:
+## Routing logic (v2)
+`src/llm/router.ts` decides local vs cloud, cloud-first:
 - explicit user choice wins
-- RAG context present → cloud
-- input >200 chars → cloud
-- history >12 turns → cloud
+- cloud consent given → cloud
 - otherwise → local Gemma
+- runtime fallbacks in `chat.ts`: cloud failure → local (if model downloaded), local failure → cloud (if consented)
 
 ## Security notes
 - **Never** commit the **service role key** or postgres password. Only the publishable anon key goes in `.env`.

@@ -72,7 +72,7 @@ export async function sendMessage(
     ragContext: opts.ragContext,
   };
 
-  let route: LLMRoute = decideRoute(req);
+  let route: LLMRoute = decideRoute(req, { cloudConsent });
   if (route === 'local' && !modelReady) {
     route = cloudConsent ? 'cloud' : 'local'; // will surface user-friendly error if not consented
   }
@@ -123,6 +123,18 @@ export async function sendMessage(
     ms.setStreaming(conversationId, '');
     route = 'cloud';
     await cloudProvider.chat(req, onEvent);
+  }
+
+  // If cloud failed (offline, provider error) and the local model is ready,
+  // retry once on-device so the app degrades instead of erroring.
+  if (lastError && route === 'cloud' && modelReady) {
+    lastError = null;
+    acc = '';
+    toolEvents.length = 0;
+    ms.setStreamingTool(conversationId, null);
+    ms.setStreaming(conversationId, '');
+    route = 'local';
+    await localProvider.chat(req, onEvent);
   }
 
   if (lastError && !acc) {
