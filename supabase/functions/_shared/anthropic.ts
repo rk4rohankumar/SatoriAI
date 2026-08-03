@@ -74,7 +74,10 @@ export async function runAnthropic(opts: {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buf += dec.decode(value, { stream: true });
+      // Anthropic emits LF-only SSE framing today, but normalize CRLF here too
+      // for symmetry with the Gemini loop and as free insurance against any
+      // intermediary that re-frames the stream with \r\n.
+      buf = (buf + dec.decode(value, { stream: true })).replace(/\r\n/g, '\n');
       let nl: number;
       while ((nl = buf.indexOf('\n\n')) !== -1) {
         const ev = buf.slice(0, nl);

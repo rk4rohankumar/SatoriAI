@@ -7,6 +7,13 @@ function sseResponse(events: unknown[]): Response {
   return new Response(new Blob([body]).stream(), { status: 200 });
 }
 
+// Mirrors the Gemini CRLF test: Anthropic emits LF-only framing today, but the
+// parser normalizes \r\n defensively, so it must also handle CRLF-framed SSE.
+function sseResponseCRLF(events: unknown[]): Response {
+  const body = events.map((e) => `data: ${JSON.stringify(e)}\r\n\r\n`).join('');
+  return new Response(new Blob([body]).stream(), { status: 200 });
+}
+
 function scriptedFetch(responses: Response[]): typeof fetch {
   let i = 0;
   return () => Promise.resolve(responses[i++]);
@@ -44,6 +51,21 @@ Deno.test('text-only passthrough emits tokens', async () => {
   });
   assertEquals(events.filter((e) => e.type === 'token').length, 1);
   assertEquals(res.tokensIn, 10);
+});
+
+Deno.test('CRLF-framed SSE (\\r\\n\\r\\n): emits token and accumulates usage', async () => {
+  const events: Record<string, unknown>[] = [];
+  const res = await runAnthropic({
+    apiKey: 'k', model: 'm', system: undefined,
+    messages: [{ role: 'user', content: 'hi' }],
+    registry: new ToolRegistry(),
+    emit: (e) => events.push(e),
+    fetchFn: scriptedFetch([sseResponseCRLF(TEXT_ONLY)]),
+  });
+  assertEquals(events.filter((e) => e.type === 'token').length, 1);
+  assertEquals(events.find((e) => e.type === 'token')?.text, 'hi');
+  assertEquals(res.tokensIn, 10);
+  assertEquals(res.tokensOut, 5);
 });
 
 Deno.test('tool round: executes tool, emits tool_call + tool_result, continues', async () => {

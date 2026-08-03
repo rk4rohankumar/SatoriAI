@@ -71,7 +71,10 @@ export async function runGemini(opts: {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buf += dec.decode(value, { stream: true });
+      // Gemini's SSE stream frames events with CRLF (\r\n\r\n). Normalize the
+      // retained buffer on every read so a \r ending one chunk and its \n
+      // arriving in the next still collapse into a single \n\n split below.
+      buf = (buf + dec.decode(value, { stream: true })).replace(/\r\n/g, '\n');
       let nl: number;
       while ((nl = buf.indexOf('\n\n')) !== -1) {
         const ev = buf.slice(0, nl);
