@@ -12,6 +12,14 @@ function scriptedFetch(responses: Response[]): typeof fetch {
   return () => Promise.resolve(responses[i++]);
 }
 
+function scriptedFetchCapturing(responses: Response[], calls: Record<string, unknown>[]): typeof fetch {
+  let i = 0;
+  return (_url, init?: RequestInit) => {
+    calls.push(JSON.parse(String(init?.body ?? '{}')));
+    return Promise.resolve(responses[i++]);
+  };
+}
+
 const G_TEXT = [
   { candidates: [{ content: { parts: [{ text: 'hi' }] } }], usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 4 } },
 ];
@@ -86,4 +94,33 @@ Deno.test('round cap: stops requesting tools after maxRounds', async () => {
     fetchFn: scriptedFetch([sseResponse(G_TOOL), sseResponse(G_TOOL), sseResponse(G_TEXT)]),
   });
   assertEquals(events.filter((e) => e.type === 'tool_call').length, 2);
+});
+
+Deno.test('forced-final request after maxRounds still sends tools + toolConfig mode NONE', async () => {
+  const registry = new ToolRegistry();
+  registry.register({
+    definition: { name: 'web_search', description: '', input_schema: {} },
+    execute: () => Promise.resolve({ success: true, content: 'x', metadata: { results: [] } }),
+  });
+  const calls: Record<string, unknown>[] = [];
+  await runGemini({
+    apiKey: 'k', model: 'm', system: undefined,
+    messages: [{ role: 'user', parts: [{ text: 'weather?' }] }],
+    registry, emit: () => {}, maxRounds: 2,
+    fetchFn: scriptedFetchCapturing(
+      [sseResponse(G_TOOL), sseResponse(G_TOOL), sseResponse(G_TEXT)],
+      calls,
+    ),
+  });
+  assertEquals(calls.length, 3);
+  // Round 1 and 2 request bodies must include tools with no toolConfig override.
+  assertEquals(Array.isArray(calls[0].tools), true);
+  assertEquals(calls[0].toolConfig, undefined);
+  assertEquals(Array.isArray(calls[1].tools), true);
+  assertEquals(calls[1].toolConfig, undefined);
+  // Forced-final round (3rd request, round >= maxRounds) must still define `tools`
+  // (since prior contents contain functionCall/functionResponse parts) and force
+  // text-only via toolConfig.functionCallingConfig.mode = 'NONE'.
+  assertEquals(Array.isArray(calls[2].tools), true);
+  assertEquals(calls[2].toolConfig, { functionCallingConfig: { mode: 'NONE' } });
 });

@@ -12,6 +12,14 @@ function scriptedFetch(responses: Response[]): typeof fetch {
   return () => Promise.resolve(responses[i++]);
 }
 
+function scriptedFetchCapturing(responses: Response[], calls: Record<string, unknown>[]): typeof fetch {
+  let i = 0;
+  return (_url, init?: RequestInit) => {
+    calls.push(JSON.parse(String(init?.body ?? '{}')));
+    return Promise.resolve(responses[i++]);
+  };
+}
+
 const TEXT_ONLY = [
   { type: 'message_start', message: { usage: { input_tokens: 10 } } },
   { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hi' } },
@@ -92,4 +100,33 @@ Deno.test('round cap: stops requesting tools after maxRounds', async () => {
     fetchFn: scriptedFetch([sseResponse(TOOL_ROUND), sseResponse(TOOL_ROUND), sseResponse(TEXT_ONLY)]),
   });
   assertEquals(events.filter((e) => e.type === 'tool_call').length, 2);
+});
+
+Deno.test('forced-final request after maxRounds still sends tools + tool_choice none', async () => {
+  const registry = new ToolRegistry();
+  registry.register({
+    definition: { name: 'web_search', description: '', input_schema: {} },
+    execute: () => Promise.resolve({ success: true, content: 'x', metadata: { results: [] } }),
+  });
+  const calls: Record<string, unknown>[] = [];
+  await runAnthropic({
+    apiKey: 'k', model: 'm', system: undefined,
+    messages: [{ role: 'user', content: 'weather?' }],
+    registry, emit: () => {}, maxRounds: 2,
+    fetchFn: scriptedFetchCapturing(
+      [sseResponse(TOOL_ROUND), sseResponse(TOOL_ROUND), sseResponse(TEXT_ONLY)],
+      calls,
+    ),
+  });
+  assertEquals(calls.length, 3);
+  // Round 1 and 2 request bodies must include tools with no tool_choice override.
+  assertEquals(Array.isArray(calls[0].tools), true);
+  assertEquals(calls[0].tool_choice, undefined);
+  assertEquals(Array.isArray(calls[1].tools), true);
+  assertEquals(calls[1].tool_choice, undefined);
+  // Forced-final round (3rd request, round >= maxRounds) must still define `tools`
+  // (since prior messages contain tool_use/tool_result blocks) and force text-only
+  // via tool_choice: none.
+  assertEquals(Array.isArray(calls[2].tools), true);
+  assertEquals(calls[2].tool_choice, { type: 'none' });
 });

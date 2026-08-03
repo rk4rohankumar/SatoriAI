@@ -32,6 +32,11 @@ export async function runAnthropic(opts: {
 
   while (true) {
     const toolsAllowed = !!tools && round < maxRounds && Date.now() < deadline;
+    // Once a tool round has happened, prior messages contain tool_use/tool_result
+    // blocks. Anthropic requires `tools` to be defined whenever those blocks are
+    // present, even on a forced-final (no-more-tools) round — so keep `tools` and
+    // explicitly disable further calls via tool_choice: none instead of omitting it.
+    const forceFinal = !toolsAllowed && round > 0 && !!tools;
     const res = await fetchFn('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -45,7 +50,11 @@ export async function runAnthropic(opts: {
         messages,
         max_tokens: 1024,
         stream: true,
-        ...(toolsAllowed ? { tools } : {}),
+        ...(toolsAllowed
+          ? { tools }
+          : forceFinal
+          ? { tools, tool_choice: { type: 'none' } }
+          : {}),
       }),
     });
     if (!res.ok || !res.body) {

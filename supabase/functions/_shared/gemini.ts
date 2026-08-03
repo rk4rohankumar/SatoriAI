@@ -35,6 +35,11 @@ export async function runGemini(opts: {
 
   while (true) {
     const toolsAllowed = !!tools && round < maxRounds && Date.now() < deadline;
+    // Once a tool round has happened, prior contents contain functionCall/
+    // functionResponse parts. Gemini requires `tools` to stay defined on a
+    // forced-final round too — so keep `tools` and disable further calls via
+    // toolConfig mode NONE instead of omitting the field.
+    const forceFinal = !toolsAllowed && round > 0 && !!tools;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:streamGenerateContent?alt=sse&key=${opts.apiKey}`;
     const res = await fetchFn(url, {
       method: 'POST',
@@ -43,7 +48,11 @@ export async function runGemini(opts: {
         contents,
         systemInstruction: opts.system ? { parts: [{ text: opts.system }] } : undefined,
         generationConfig: { maxOutputTokens: 1024 },
-        ...(toolsAllowed ? { tools } : {}),
+        ...(toolsAllowed
+          ? { tools }
+          : forceFinal
+          ? { tools, toolConfig: { functionCallingConfig: { mode: 'NONE' } } }
+          : {}),
       }),
     });
     if (!res.ok || !res.body) {
