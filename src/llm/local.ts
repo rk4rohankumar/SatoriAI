@@ -3,6 +3,8 @@ import type { ChatRequest, LLMProvider, StreamHandler } from './types';
 
 const MODEL_URL = process.env.EXPO_PUBLIC_MODEL_URL!;
 const MODEL_FILENAME = process.env.EXPO_PUBLIC_MODEL_FILENAME ?? 'model.gguf';
+// Exact size of the GGUF at MODEL_URL; guards against silently truncated downloads.
+const MODEL_SIZE_BYTES = parseInt(process.env.EXPO_PUBLIC_MODEL_SIZE_BYTES ?? '0', 10);
 
 /**
  * Resolve absolute path where model lives on device.
@@ -13,7 +15,16 @@ export function modelPath() {
 
 export async function isModelDownloaded(): Promise<boolean> {
   const info = await FileSystem.getInfoAsync(modelPath());
-  return info.exists && (info.size ?? 0) > 100 * 1024 * 1024; // sanity: >100MB
+  if (!info.exists) return false;
+  const size = info.size ?? 0;
+  // With a known expected size, accept only a complete file (tiny tolerance
+  // for filesystem block reporting). Fallback: legacy >100MB sanity check.
+  if (MODEL_SIZE_BYTES > 0) return size >= MODEL_SIZE_BYTES * 0.999;
+  return size > 100 * 1024 * 1024;
+}
+
+export async function deleteModel(): Promise<void> {
+  await FileSystem.deleteAsync(modelPath(), { idempotent: true });
 }
 
 export type DownloadProgress = {
@@ -43,6 +54,18 @@ export async function downloadModel(
   );
   const result = await dl.downloadAsync();
   if (!result?.uri) throw new Error('Model download failed');
+  // Verify completeness — HF redirects can make progress totals lie, leaving
+  // a truncated file that then fails to load.
+  if (MODEL_SIZE_BYTES > 0) {
+    const info = await FileSystem.getInfoAsync(dest);
+    const size = info.exists ? (info.size ?? 0) : 0;
+    if (size < MODEL_SIZE_BYTES * 0.999) {
+      await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => {});
+      throw new Error(
+        `Download incomplete (${(size / 1e6).toFixed(0)} of ${(MODEL_SIZE_BYTES / 1e6).toFixed(0)} MB) — deleted, please retry`,
+      );
+    }
+  }
   return result.uri;
 }
 
@@ -73,11 +96,20 @@ async function getCtx(): Promise<LlamaContext> {
   if (!(await isModelDownloaded())) throw new LocalModelNotReadyError();
   // Dynamic import so non-native environments don't crash on require.
   const { initLlama } = await import('llama.rn');
-  ctx = (await initLlama({
-    model: modelPath(),
-    n_ctx: 4096,
-    n_gpu_layers: 0,
-  })) as unknown as LlamaContext;
+  try {
+    ctx = (await initLlama({
+      model: modelPath(),
+      n_ctx: 4096,
+      n_gpu_layers: 0,
+    })) as unknown as LlamaContext;
+  } catch (e) {
+    const info = await FileSystem.getInfoAsync(modelPath()).catch(() => null);
+    const size = info?.exists ? (info.size ?? 0) : 0;
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `model init failed (file: ${MODEL_FILENAME}, ${(size / 1e6).toFixed(0)} MB on disk): ${detail}`,
+    );
+  }
   return ctx;
 }
 

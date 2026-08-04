@@ -20,7 +20,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_8SgUC1c8y6xtwU5-SUyqaQ_7RKa8yqv",
         "EXPO_PUBLIC_MODEL_URL": "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
         "EXPO_PUBLIC_MODEL_FILENAME": "gemma-3-4b-it-Q4_K_M.gguf",
-        "EXPO_PUBLIC_DEFAULT_CLOUD_PROVIDER": "gemini"
+        "EXPO_PUBLIC_DEFAULT_CLOUD_PROVIDER": "gemini",
+        "EXPO_PUBLIC_MODEL_SIZE_BYTES": "2489894016"
       }
     },
     "production": {
@@ -31,7 +32,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_8SgUC1c8y6xtwU5-SUyqaQ_7RKa8yqv",
         "EXPO_PUBLIC_MODEL_URL": "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
         "EXPO_PUBLIC_MODEL_FILENAME": "gemma-3-4b-it-Q4_K_M.gguf",
-        "EXPO_PUBLIC_DEFAULT_CLOUD_PROVIDER": "gemini"
+        "EXPO_PUBLIC_DEFAULT_CLOUD_PROVIDER": "gemini",
+        "EXPO_PUBLIC_MODEL_SIZE_BYTES": "2489894016"
       }
     }
   },
