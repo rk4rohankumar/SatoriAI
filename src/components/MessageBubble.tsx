@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
+import { MarkdownBody } from '@/src/components/MarkdownBody';
 import { matchCitedSources } from '@/src/components/sources';
 import { ToolChip } from '@/src/components/ToolChip';
 import type { ToolEventRecord } from '@/src/llm/types';
@@ -19,6 +20,11 @@ type Props = {
   animateEntrance?: boolean;
   /** Web-search (and other tool) activity attached to this assistant message, if any. */
   toolEvents?: ToolEventRecord[] | null;
+  /**
+   * Render assistant content as markdown. Defaults on; the live streaming
+   * bubble turns it off (re-parsing on every token janks the stream).
+   */
+  markdown?: boolean;
 };
 
 export function MessageBubble({
@@ -29,6 +35,7 @@ export function MessageBubble({
   hapticOnMount,
   animateEntrance = true,
   toolEvents,
+  markdown = true,
 }: Props) {
   const { c, r, s } = useTheme();
   const isUser = role === 'user';
@@ -93,14 +100,18 @@ export function MessageBubble({
       >
         {!isUser &&
           toolEvents?.map((event) => <ToolChip key={event.id} event={event} />)}
-        <Text
-          variant="body"
-          style={{
-            color: isUser ? c.bubbleUserFg : c.bubbleAssistantFg,
-          }}
-        >
-          {content}
-        </Text>
+        {!isUser && markdown ? (
+          <MarkdownBody color={c.bubbleAssistantFg}>{content}</MarkdownBody>
+        ) : (
+          <Text
+            variant="body"
+            style={{
+              color: isUser ? c.bubbleUserFg : c.bubbleAssistantFg,
+            }}
+          >
+            {content}
+          </Text>
+        )}
         {!isUser && (route || model) && (
           <Text
             variant="micro"
