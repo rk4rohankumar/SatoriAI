@@ -135,6 +135,7 @@ export default function ChatDetail() {
                     role="assistant"
                     content={streaming}
                     animateEntrance={false}
+                    markdown={false}
                   />
                 ) : null}
               </>
