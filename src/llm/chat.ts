@@ -47,11 +47,26 @@ export async function sendMessage(
   if (userErr) throw userErr;
   if (userMsg) ms.appendLocal(userMsg as Message);
 
-  // 2. build chat history for the LLM
-  const history = (ms.byConv[conversationId] ?? []).map<ChatMessage>((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
+  // 2. build chat history for the LLM — drop error placeholders that were
+  // persisted as assistant turns; they poison the model's context.
+  // Re-read store state: `ms` is the snapshot from before appendLocal, so
+  // building from it would omit the message the user just sent (the model
+  // would answer the PREVIOUS turn — or 400 on an empty first turn).
+  const isErrorTurn = (m: Message) =>
+    m.role === 'assistant' &&
+    /^(Local error:|Cloud error:|Cloud failed:|\(no response\)|I can't answer yet)/.test(
+      m.content,
+    );
+  let history = (useMessages.getState().byConv[conversationId] ?? [])
+    .filter((m) => !isErrorTurn(m))
+    .map<ChatMessage>((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+  // Belt and braces: the current user message must be the last turn.
+  if (history.length === 0 || history[history.length - 1].content !== text) {
+    history = [...history, { role: 'user', content: text }];
+  }
   const llmMessages: ChatMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...history,
@@ -72,7 +87,7 @@ export async function sendMessage(
     ragContext: opts.ragContext,
   };
 
-  let route: LLMRoute = decideRoute(req);
+  let route: LLMRoute = decideRoute(req, { cloudConsent });
   if (route === 'local' && !modelReady) {
     route = cloudConsent ? 'cloud' : 'local'; // will surface user-friendly error if not consented
   }
@@ -123,6 +138,18 @@ export async function sendMessage(
     ms.setStreaming(conversationId, '');
     route = 'cloud';
     await cloudProvider.chat(req, onEvent);
+  }
+
+  // If cloud failed (offline, provider error) and the local model is ready,
+  // retry once on-device so the app degrades instead of erroring.
+  if (lastError && route === 'cloud' && modelReady) {
+    lastError = null;
+    acc = '';
+    toolEvents.length = 0;
+    ms.setStreamingTool(conversationId, null);
+    ms.setStreaming(conversationId, '');
+    route = 'local';
+    await localProvider.chat(req, onEvent);
   }
 
   if (lastError && !acc) {

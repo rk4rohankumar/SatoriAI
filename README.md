@@ -1,6 +1,6 @@
 # SatoriAI
 
-Hybrid local + cloud AI chat app for Android and iOS. Short prompts run fully on-device (Gemma 3 1B via `llama.rn` — works offline); longer or document-grounded prompts are relayed to Claude / Gemini through Supabase Edge Functions. Upload PDFs and chat over them with pgvector-backed retrieval.
+Hybrid local + cloud AI chat app for Android and iOS. Cloud chats run on Claude / Gemini with agentic web search; offline (or without cloud consent) it falls back to on-device Gemma 3 4B via `llama.rn`. Prompts with document context are relayed through Supabase Edge Functions. Upload PDFs and chat over them with pgvector-backed retrieval.
 
 ## 📲 Install (Android)
 
@@ -8,14 +8,14 @@ Hybrid local + cloud AI chat app for Android and iOS. Short prompts run fully on
 
 1. Download `SatoriAI-v1.0.0.apk` on your Android phone
 2. Open it — allow "install from unknown sources" when prompted
-3. First launch downloads the on-device model (~700 MB, Wi-Fi recommended); cloud chat works immediately
+3. First launch can download the on-device model (~2.5 GB, Wi-Fi recommended); cloud chat works immediately
 
 iOS: no prebuilt binary (Apple requires a paid developer account for distribution). Build it yourself — see below.
 
 ## Stack
 
 - **Mobile:** Expo SDK 54, React Native 0.81, TypeScript, expo-router
-- **Local LLM:** `llama.rn` + Gemma 3 1B (Q4_K_M GGUF, ~700 MB, downloaded on first run)
+- **Local LLM:** `llama.rn` + Gemma 3 4B (Q4_K_M GGUF, ~2.5 GB, downloaded on first run; offline fallback)
 - **Backend:** Supabase — Postgres + pgvector, Auth, Storage, Edge Functions
 - **Cloud LLM:** Claude Haiku 4.5 / Sonnet 4.6, Gemini 2.5 Flash / Pro
 - **Embeddings:** Gemini `text-embedding-004` (768-dim), HNSW cosine index
@@ -24,7 +24,7 @@ iOS: no prebuilt binary (Apple requires a paid developer account for distributio
 
 - Email auth (Supabase, RLS-isolated per user)
 - Streaming chat with conversation history
-- Automatic local/cloud routing (`src/llm/router.ts`): explicit choice wins; RAG context, long input, or long history → cloud; otherwise on-device Gemma
+- Cloud-first routing (`src/llm/router.ts`): explicit choice wins; cloud when consented, on-device Gemma as offline/no-consent fallback (auto-fallback both directions on failure)
 - Library: PDF upload → chunk → embed → pgvector retrieval
 - Agentic web search (Tavily) on cloud chats — model decides when to search; sources shown in-chat
 - Soft daily cap on cloud calls per user

@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { Composer } from '@/src/components/Composer';
 import { MessageBubble } from '@/src/components/MessageBubble';
 import { ToolChip } from '@/src/components/ToolChip';
 import { sendMessage } from '@/src/llm/chat';
 import type { ToolEventRecord } from '@/src/llm/types';
+import { useConversations } from '@/src/store/conversations';
 import { useMessages } from '@/src/store/messages';
 import type { Message } from '@/src/store/messages';
 import { useTheme } from '@/src/theme';
@@ -28,6 +30,10 @@ export default function ChatDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const conversationId = id!;
 
+  const title = useConversations(
+    (st) => st.list.find((conv) => conv.id === conversationId)?.title,
+  );
+
   const messages = useMessages((st) => st.byConv[conversationId] ?? EMPTY_MSGS);
   const streaming = useMessages((st) => st.streaming[conversationId]);
   const streamingTool = useMessages((st) => st.streamingTool[conversationId]);
@@ -36,6 +42,21 @@ export default function ChatDetail() {
 
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList>(null);
+
+  // Android + SDK54 edge-to-edge: adjustResize is ignored and
+  // KeyboardAvoidingView misbehaves, so track the keyboard inset manually.
+  const [kbHeight, setKbHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', (e) =>
+      setKbHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     load(conversationId);
@@ -63,8 +84,9 @@ export default function ChatDetail() {
       style={{ flex: 1, backgroundColor: c.bg }}
       edges={['left', 'right', 'bottom']}
     >
+      <Stack.Screen options={{ title: title ?? 'New chat' }} />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingBottom: Platform.OS === 'android' ? kbHeight : 0 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.bottom : 0}
       >

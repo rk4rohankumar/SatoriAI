@@ -93,9 +93,9 @@ export default function Settings() {
             style={{ padding: s['4'], gap: s['3'] }}
           >
             <View>
-              <Text variant="bodyMedium">Gemma 3 1B</Text>
+              <Text variant="bodyMedium">Gemma 3 4B</Text>
               <Text variant="meta" color="fgMuted" style={{ marginTop: 2 }}>
-                ~700 MB · stays on your device · runs offline
+                ~2.5 GB · stays on your device · runs offline
               </Text>
             </View>
 
