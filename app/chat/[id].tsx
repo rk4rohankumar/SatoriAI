@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   View,
@@ -42,6 +43,21 @@ export default function ChatDetail() {
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList>(null);
 
+  // Android + SDK54 edge-to-edge: adjustResize is ignored and
+  // KeyboardAvoidingView misbehaves, so track the keyboard inset manually.
+  const [kbHeight, setKbHeight] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', (e) =>
+      setKbHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
   useEffect(() => {
     load(conversationId);
     const unsub = subscribe(conversationId);
@@ -70,7 +86,7 @@ export default function ChatDetail() {
     >
       <Stack.Screen options={{ title: title ?? 'New chat' }} />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingBottom: Platform.OS === 'android' ? kbHeight : 0 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight + insets.bottom : 0}
       >

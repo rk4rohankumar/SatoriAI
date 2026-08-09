@@ -47,7 +47,12 @@ export async function runGemini(opts: {
       body: JSON.stringify({
         contents,
         systemInstruction: opts.system ? { parts: [{ text: opts.system }] } : undefined,
-        generationConfig: { maxOutputTokens: 1024 },
+        generationConfig: {
+          maxOutputTokens: 2048,
+          // 2.5 Flash burns its whole budget on hidden "thinking" otherwise,
+          // returning empty completions for trivial prompts.
+          thinkingConfig: { thinkingBudget: 0 },
+        },
         ...(toolsAllowed
           ? { tools }
           : forceFinal
