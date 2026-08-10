@@ -6,7 +6,7 @@ Hybrid local + cloud AI chat app for Android and iOS. Cloud chats run on Claude 
 
 **[Download the APK — latest release](https://github.com/rk4rohankumar/SatoriAI/releases/latest)**
 
-1. Download `SatoriAI-v1.0.0.apk` on your Android phone
+1. Download `SatoriAI-v1.1.0.apk` on your Android phone
 2. Open it — allow "install from unknown sources" when prompted
 3. First launch can download the on-device model (~2.5 GB, Wi-Fi recommended); cloud chat works immediately
 
