@@ -1,0 +1,25 @@
+name: Supabase keep-alive
+
+# Free-tier Supabase pauses projects after ~7 days without activity.
+# A real PostgREST query once a day counts as activity and keeps the
+# backend (and the released APK) alive.
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily 06:17 UTC (off the whole-hour rush)
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query database via PostgREST
+        run: |
+          code=$(curl -s -o /tmp/body -w "%{http_code}" \
+            "https://btpuxcuvphoccqjqpcok.supabase.co/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: ${{ vars.SUPABASE_ANON_KEY || 'sb_publishable_8SgUC1c8y6xtwU5-SUyqaQ_7RKa8yqv' }}" \
+            -H "Authorization: Bearer ${{ vars.SUPABASE_ANON_KEY || 'sb_publishable_8SgUC1c8y6xtwU5-SUyqaQ_7RKa8yqv' }}")
+          echo "HTTP $code"
+          cat /tmp/body; echo
+          # 200 = alive (RLS returns [] for anon — fine, the query still ran)
+          [ "$code" = "200" ]
